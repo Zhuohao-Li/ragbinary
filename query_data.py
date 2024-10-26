@@ -46,10 +46,29 @@ def print_scores(results):
         print(f"Unable to find matching results.")
         return
 
+def wrapper_function(csv_path):
+    df = pd.read_csv(csv_path)
+   
+    results_dict = {}
+
+    for index, row in df.iterrows():
+        query_text = row['query_text']        
+        results = retrieve_db(query_text=query_text)     
+        similarity_scores = print_scores(results)
+        results_dict[query_text] = similarity_scores
+    
+    return results_dict
+
 def main():
     query_text = parse()
     results = retrieve_db(query_text=query_text)
     print_scores(results)
+
+    csv_path = parse()
+    results_dict = wrapper_function(csv_path=csv_path)
+    for query, scores in results_dict.items():
+        print(f"Query: {query} -> Similarity Scores: {scores}")
+
 
     # context_text = "\n\n---\n\n".join([doc.page_content for doc, _score in results])
     # prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
