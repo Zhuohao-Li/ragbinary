@@ -28,6 +28,8 @@ def parse():
             description="Queries the Chrome Database to Check for similarity",
             )
     parser.add_argument("--query_bulk", type=str, help="Provide the CSV filename to query in Bulk")
+    parser.add_argument("--query_bulk_prefix", type=str, help="The prefix to add to each query from the csv")
+    parser.add_argument("--query_bulk_suffix", type=str, help="The suffix to add to each query from the csv")
     parser.add_argument("--query_text", type=str, help="The query text.")
     parser.add_argument("--output", type=str, help="The output filename to store the results to.")
     args = parser.parse_args()
@@ -50,16 +52,35 @@ def print_scores(results):
         return
     return similarity_scores
 
-def csv_similarity(csv_path):
+def csv_similarity(csv_path, arguments):
     df = pd.read_csv(csv_path)
    
     results_dict = {}
 
     for index, row in df.iterrows():
         query_text = row['query_text']        
+        if arguments.query_bulk_prefix:
+            query_text = f"{arguments.query_bulk_prefix} {query_text}"
+        if arguments.query_bulk_suffix:
+            query_text = f"{query_text} {arguments.query_bulk_suffix}"
         results = retrieve_db(query_text=query_text)     
         similarity_scores = print_scores(results)
         results_dict[query_text] = similarity_scores
+        
+        # Context work
+        context_text = "\n\n---\n\n".join([doc.page_content for doc, _score in results])
+        prompt_template = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
+        prompt = prompt_template.format(context=context_text, question=query_text)
+        # print(prompt)
+
+        model = ChatOpenAI()
+        response_text = model.predict(prompt)
+
+        sources = [doc.metadata.get("source", None) for doc, _score in results]
+        formatted_response = f"Response: {response_text}\nSources: {sources}"
+        print(formatted_response)
+
+
     
     return results_dict
 
@@ -71,7 +92,7 @@ def main():
     arguments = parse()
     if arguments.query_bulk:
         csv_path = arguments.query_bulk
-        results_dict = csv_similarity(csv_path=csv_path)
+        results_dict = csv_similarity(csv_path=csv_path, arguments=arguments)
         if arguments.output:
             save_results_to_file(json.dumps(results_dict), arguments.output)
         else:
